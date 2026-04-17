@@ -228,6 +228,12 @@ def _unload_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
         print(f"Error: ローカルにプロジェクトが見つかりません: {src_path}", file=sys.stderr)
         return False
 
+    # カレントディレクトリがアンロード対象の配下にある場合はスキップ
+    cwd = Path.cwd().resolve()
+    if cwd == src_path.resolve() or src_path.resolve() in cwd.parents:
+        print(f"Error: '{project}' はカレントディレクトリを含むためアンロードできません（別のディレクトリに移動してから実行してください）", file=sys.stderr)
+        return False
+
     print(f"アンロード中: {project}")
     print(f"  圧縮先: {zip_path}")
 
