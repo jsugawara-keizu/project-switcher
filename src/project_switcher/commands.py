@@ -115,22 +115,39 @@ def _fmt_desc(name: str, descriptions: dict) -> str:
     return f"  # {desc}" if desc else ""
 
 
+def _display_width(s: str) -> int:
+    """全角文字を幅2、半角文字を幅1として文字列の表示幅を返す。"""
+    import unicodedata
+    width = 0
+    for ch in s:
+        eaw = unicodedata.east_asian_width(ch)
+        width += 2 if eaw in ("W", "F") else 1
+    return width
+
+
+def _ljust_display(s: str, width: int) -> str:
+    """表示幅を揃えてスペースでパディングする。"""
+    pad = width - _display_width(s)
+    return s + " " * max(pad, 0)
+
+
 def cmd_list(cfg: dict) -> None:
     def _print_table(headers: list[str], rows: list[list[str]]) -> None:
         if not rows:
             return
-        # 各列の幅を計算
+        # 各列の表示幅を計算
         widths: list[int] = []
         for i, h in enumerate(headers):
-            maxw = len(h)
+            maxw = _display_width(h)
             for r in rows:
                 cell = str(r[i]) if i < len(r) else ""
-                if len(cell) > maxw:
-                    maxw = len(cell)
+                w = _display_width(cell)
+                if w > maxw:
+                    maxw = w
             widths.append(maxw)
 
         # ヘッダー行
-        header_line = "  " + " | ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
+        header_line = "  " + " | ".join(_ljust_display(h, widths[i]) for i, h in enumerate(headers))
         sep_line = "  " + "-+-".join("-" * widths[i] for i in range(len(headers)))
         print(header_line)
         print(sep_line)
@@ -138,7 +155,7 @@ def cmd_list(cfg: dict) -> None:
         # データ行
         for r in rows:
             line = "  " + " | ".join(
-                (str(r[i]) if i < len(r) else "").ljust(widths[i]) for i in range(len(headers))
+                _ljust_display(str(r[i]) if i < len(r) else "", widths[i]) for i in range(len(headers))
             )
             print(line)
 
@@ -150,14 +167,13 @@ def cmd_list(cfg: dict) -> None:
     print("=== ロード済み (Local) ===")
     local_projects = sorted(p for p in local_dir.iterdir() if p.is_dir()) if local_dir.exists() else []
     if local_projects:
-        headers = ["名前", "バックアップ", "保護", "説明"]
+        headers = ["名前", "保護", "説明"]
         rows: list[list[str]] = []
         for p in local_projects:
             name = p.name
-            backup = "あり" if (icloud_dir / f"{name}.zip").exists() else ""
             lock = "はい" if name in protected else ""
             desc = descriptions.get(name, "")
-            rows.append([name, backup, lock, desc])
+            rows.append([name, lock, desc])
         _print_table(headers, rows)
     else:
         print("  (なし)")
@@ -170,13 +186,12 @@ def cmd_list(cfg: dict) -> None:
         else []
     )
     if icloud_zips:
-        headers = ["名前", "ローカル", "説明"]
+        headers = ["名前", "説明"]
         rows = []
         for z in icloud_zips:
             name = z.stem
-            local_exists = "あり" if (local_dir / name).is_dir() else ""
             desc = descriptions.get(name, "")
-            rows.append([name, local_exists, desc])
+            rows.append([name, desc])
         _print_table(headers, rows)
     else:
         print("  (なし)")
