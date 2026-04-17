@@ -9,7 +9,7 @@ cd /path/to/project-switcher
 pipx install .
 ```
 
-タブ補完の有効化（zsh）:
+### タブ補完の有効化（zsh）
 
 ```bash
 mkdir -p ~/.zsh/completions
@@ -25,18 +25,53 @@ autoload -U compinit && compinit
 
 ## 使い方
 
+### list — 一覧表示
+
 ```bash
-pswitch list                        # ロード済み・アンロード済みの一覧表示
-pswitch load <project>              # クラウド → ローカルに展開
-pswitch load <project1> <project2>  # 複数同時ロード
-pswitch unload <project>            # ローカル → クラウドにZip圧縮して移動
-pswitch unload <project1> <project2> # 複数同時アンロード
-pswitch config                      # 現在の設定を表示
-pswitch config --icloud-dir <PATH>  # クラウド側の保存先を変更
-pswitch config --local-dir <PATH>   # ローカルワークスペースを変更
+pswitch list
 ```
 
-## 設定
+ロード済み（ローカル展開中）とアンロード済み（クラウドにZip保存中）のプロジェクトを表示します。
+登録済みの説明があれば `# 説明文` としてインライン表示されます。
+
+### load — ロード
+
+```bash
+pswitch load <project> [project2 ...]
+```
+
+クラウドのZipをローカルワークスペースへ展開します。複数プロジェクトを同時に指定できます。
+展開完了後、クラウド側のZipファイルは削除されます。
+
+### unload — アンロード
+
+```bash
+pswitch unload <project> [project2 ...]
+```
+
+ローカルのプロジェクトフォルダをZip圧縮してクラウドへ移動します。複数指定可。
+同名のZipが既にある場合は上書きします。ローカルフォルダは削除されます。
+
+iCloud Drive の場合は、クラウドへの同期完了後に `brctl evict` でローカルのZipコピーを自動削除します。
+evictのタイムアウト時は `iCloudへのアップロードはバックグラウンドで継続されます` と表示されますが、手動での操作は不要です。iCloudクライアントがバックグラウンドでアップロードを完了させ、自動でクラウド専用状態に移行します。
+
+### desc — 説明の管理
+
+```bash
+pswitch desc <project> "説明文"   # 登録・更新
+pswitch desc <project>            # 表示
+pswitch desc <project> --delete   # 削除
+```
+
+プロジェクトごとに説明を登録します。設定ファイルに保存され、ロード/アンロード状態が変わっても引き継がれます。
+
+### config — 設定
+
+```bash
+pswitch config                        # 現在の設定を表示
+pswitch config --icloud-dir <PATH>    # クラウド側の保存先を変更
+pswitch config --local-dir <PATH>     # ローカルワークスペースを変更
+```
 
 設定ファイル: `~/.config/project-switcher/config.json`
 
@@ -44,6 +79,7 @@ pswitch config --local-dir <PATH>   # ローカルワークスペースを変更
 |------|------------|------|
 | `icloud_dir` | `~/Library/Mobile Documents/com~apple~CloudDocs/Cloud Workspaces` | クラウド側のZip保存先 |
 | `local_dir` | `~/Local Workspaces` | ローカルの展開先 |
+| `descriptions` | `{}` | プロジェクトの説明（`desc` コマンドで管理） |
 
 ## 対応クラウドストレージ
 
@@ -52,13 +88,13 @@ pswitch config --local-dir <PATH>   # ローカルワークスペースを変更
 追加設定不要。以下の機能が自動で動作します。
 
 - **ロード時**: 未ダウンロード（`.icloud` プレースホルダ）のZipを `brctl download` で自動取得
-- **アンロード時**: iCloudへの同期完了後に `brctl evict` でローカルコピーを自動削除
+- **アンロード時**: クラウドへの同期完了後に `brctl evict` でローカルのZipコピーを自動削除
 
 ### OneDrive
 
 **事前設定**: OneDrive の設定 → アカウント → **「Files On-Demand」をオン**にする。
 
-この設定が有効であれば、`pswitch unload` でzipをOneDriveフォルダに配置した後、OneDriveクライアントが自動でクラウド専用状態（オンデマンド）に移行します。`brctl evict` は実行されません。
+`pswitch unload` でZipをOneDriveフォルダに配置後、OneDriveクライアントが自動でクラウド専用状態（オンデマンド）に移行します。
 
 ```bash
 pswitch config --icloud-dir "/Users/<name>/OneDrive/Cloud Workspaces"
@@ -70,7 +106,7 @@ pswitch config --icloud-dir "/Users/<name>/OneDrive/Cloud Workspaces"
 
 > 「ミラーリング」モードでは全ファイルが常にローカルに保存されるため、ストレージ節約効果がありません。
 
-`pswitch unload` でzipを配置後、Google Driveクライアントが自動でクラウド専用状態に移行します。`brctl evict` は実行されません。
+`pswitch unload` でZipを配置後、Google Driveクライアントが自動でクラウド専用状態に移行します。
 
 ```bash
 pswitch config --icloud-dir "/Users/<name>/Google Drive/My Drive/Cloud Workspaces"

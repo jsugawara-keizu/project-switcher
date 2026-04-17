@@ -1,12 +1,27 @@
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 from pathlib import Path
 
 
 _ICLOUD_MARKER = "com~apple~CloudDocs"
+_BAR_WIDTH = 30
+
+
+def _progress(label: str, current: int, total: int) -> None:
+    pct = current / total if total else 1.0
+    filled = int(_BAR_WIDTH * pct)
+    bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
+    print(f"\r  {label} [{bar}] {pct:5.1%} ({current}/{total})", end="", flush=True)
+
+
+def _progress_done(label: str, total: int) -> None:
+    bar = "█" * _BAR_WIDTH
+    print(f"\r  {label} [{bar}] 100.0% ({total}/{total})")
 
 
 def _is_icloud(path: Path) -> bool:
@@ -70,7 +85,7 @@ def _evict_after_sync(zip_path: Path, timeout: int = 60) -> None:
 
     print()
     # evict失敗でもアンロード自体は完了しているので警告のみ
-    print("  警告: iCloudへのアップロード確認・evictに失敗しました（手動で確認してください）", file=sys.stderr)
+    print("  iCloudへのアップロードはバックグラウンドで継続されます", file=sys.stderr)
 
 
 def available_to_load(cfg: dict) -> list[str]:
@@ -95,16 +110,22 @@ def available_to_unload(cfg: dict) -> list[str]:
     return sorted(p.name for p in local_dir.iterdir() if p.is_dir())
 
 
+def _fmt_desc(name: str, descriptions: dict) -> str:
+    desc = descriptions.get(name, "")
+    return f"  # {desc}" if desc else ""
+
+
 def cmd_list(cfg: dict) -> None:
     icloud_dir = Path(cfg["icloud_dir"])
     local_dir = Path(cfg["local_dir"])
+    descriptions = cfg.get("descriptions", {})
 
     print("=== ロード済み (Local) ===")
     local_projects = sorted(p for p in local_dir.iterdir() if p.is_dir()) if local_dir.exists() else []
     if local_projects:
         for p in local_projects:
             tag = "  [iCloudにバックアップあり]" if (icloud_dir / f"{p.name}.zip").exists() else ""
-            print(f"  {p.name}{tag}")
+            print(f"  {p.name}{tag}{_fmt_desc(p.name, descriptions)}")
     else:
         print("  (なし)")
 
@@ -119,9 +140,34 @@ def cmd_list(cfg: dict) -> None:
         for z in icloud_zips:
             name = z.stem
             tag = "  ※ローカルにも存在" if (local_dir / name).is_dir() else ""
-            print(f"  {name}{tag}")
+            print(f"  {name}{tag}{_fmt_desc(name, descriptions)}")
     else:
         print("  (なし)")
+
+
+def cmd_desc(project: str, description: str | None, cfg: dict) -> None:
+    from . import config as cfg_module
+    descriptions = cfg.get("descriptions", {})
+
+    if description is None:
+        # 説明を表示
+        desc = descriptions.get(project, "")
+        if desc:
+            print(f"{project}: {desc}")
+        else:
+            print(f"{project}: (説明なし)")
+        return
+
+    if description == "":
+        # 説明を削除
+        descriptions.pop(project, None)
+        print(f"{project} の説明を削除しました")
+    else:
+        descriptions[project] = description
+        print(f"{project}: {description}")
+
+    cfg["descriptions"] = descriptions
+    cfg_module.save(cfg)
 
 
 def _load_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
@@ -143,7 +189,16 @@ def _load_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
 
     dest_path.mkdir(parents=True)
     with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(dest_path)
+        members = zf.infolist()
+        total = len(members)
+        for i, member in enumerate(members, 1):
+            extracted = dest_path / member.filename
+            zf.extract(member, dest_path)
+            perm = (member.external_attr >> 16) & 0xFFFF
+            if perm:
+                os.chmod(extracted, perm)
+            _progress("展開", i, total)
+    _progress_done("展開", total)
 
     children = list(dest_path.iterdir())
     if len(children) == 1 and children[0].is_dir() and children[0].name == project:
@@ -152,6 +207,7 @@ def _load_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
             shutil.move(str(item), str(dest_path / item.name))
         inner.rmdir()
 
+    zip_path.unlink(missing_ok=True)
     print(f"完了: {project} をロードしました")
     return True
 
@@ -177,12 +233,21 @@ def _unload_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
 
     icloud_dir.mkdir(parents=True, exist_ok=True)
 
-    tmp_zip = zip_path.with_suffix(".tmp.zip")
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip", prefix="pswitch-")
+    tmp_zip = Path(tmp_path)
     try:
+        files = [f for f in src_path.rglob("*") if f.is_file()]
+        total = len(files)
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for file in src_path.rglob("*"):
-                zf.write(file, file.relative_to(src_path))
-        tmp_zip.replace(zip_path)
+            for i, file in enumerate(files, 1):
+                info = zipfile.ZipInfo.from_file(file, file.relative_to(src_path))
+                info.external_attr = (file.stat().st_mode & 0xFFFF) << 16
+                with file.open("rb") as f:
+                    zf.writestr(info, f.read(), zipfile.ZIP_DEFLATED)
+                _progress("圧縮", i, total)
+        os.close(tmp_fd)
+        _progress_done("圧縮", total)
+        shutil.move(str(tmp_zip), str(zip_path))
     except Exception:
         tmp_zip.unlink(missing_ok=True)
         raise

@@ -12,6 +12,7 @@ DEFAULTS = {
         / "Cloud Workspaces"
     ),
     "local_dir": str(Path.home() / "Local Workspaces"),
+    "descriptions": {},
 }
 
 
