@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "project-switcher"
+version = "0.1.0"
+description = "Mac project load/unload tool between iCloud and local workspace"
+requires-python = ">=3.11"
+dependencies = ["argcomplete>=3.0"]
+
+[project.scripts]
+pswitch = "project_switcher.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/project_switcher"]
