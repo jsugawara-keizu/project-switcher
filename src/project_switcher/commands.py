@@ -119,13 +119,15 @@ def cmd_list(cfg: dict) -> None:
     icloud_dir = Path(cfg["icloud_dir"])
     local_dir = Path(cfg["local_dir"])
     descriptions = cfg.get("descriptions", {})
+    protected = cfg.get("protected", [])
 
     print("=== ロード済み (Local) ===")
     local_projects = sorted(p for p in local_dir.iterdir() if p.is_dir()) if local_dir.exists() else []
     if local_projects:
         for p in local_projects:
             tag = "  [iCloudにバックアップあり]" if (icloud_dir / f"{p.name}.zip").exists() else ""
-            print(f"  {p.name}{tag}{_fmt_desc(p.name, descriptions)}")
+            lock = "  [保護]" if p.name in protected else ""
+            print(f"  {p.name}{tag}{lock}{_fmt_desc(p.name, descriptions)}")
     else:
         print("  (なし)")
 
@@ -220,12 +222,16 @@ def cmd_load(projects: list[str], cfg: dict) -> None:
         sys.exit(1)
 
 
-def _unload_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
+def _unload_one(project: str, icloud_dir: Path, local_dir: Path, protected: list) -> bool:
     src_path = local_dir / project
     zip_path = icloud_dir / f"{project}.zip"
 
     if not src_path.is_dir():
         print(f"Error: ローカルにプロジェクトが見つかりません: {src_path}", file=sys.stderr)
+        return False
+
+    if project in protected:
+        print(f"Error: '{project}' はアンロード禁止に設定されています（`pswitch protect --remove {project}` で解除）", file=sys.stderr)
         return False
 
     # カレントディレクトリがアンロード対象の配下にある場合はスキップ
@@ -268,6 +274,27 @@ def _unload_one(project: str, icloud_dir: Path, local_dir: Path) -> bool:
 def cmd_unload(projects: list[str], cfg: dict) -> None:
     icloud_dir = Path(cfg["icloud_dir"])
     local_dir = Path(cfg["local_dir"])
-    errors = [p for p in projects if not _unload_one(p, icloud_dir, local_dir)]
+    protected = cfg.get("protected", [])
+    errors = [p for p in projects if not _unload_one(p, icloud_dir, local_dir, protected)]
     if errors:
         sys.exit(1)
+
+
+def cmd_protect(project: str, remove: bool, cfg: dict) -> None:
+    from . import config as cfg_module
+    protected: list = cfg.get("protected", [])
+
+    if remove:
+        if project in protected:
+            protected.remove(project)
+            cfg["protected"] = protected
+            cfg_module.save(cfg)
+            print(f"{project} のアンロード禁止を解除しました")
+        else:
+            print(f"{project} はアンロード禁止に設定されていません")
+    else:
+        if project not in protected:
+            protected.append(project)
+            cfg["protected"] = protected
+            cfg_module.save(cfg)
+        print(f"{project} をアンロード禁止に設定しました")

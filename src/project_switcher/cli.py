@@ -4,7 +4,7 @@ import sys
 import argcomplete
 
 from . import config as cfg_module
-from .commands import available_to_load, available_to_unload, cmd_desc, cmd_list, cmd_load, cmd_unload
+from .commands import available_to_load, available_to_unload, cmd_desc, cmd_list, cmd_load, cmd_protect, cmd_unload
 
 
 def _load_completer(prefix, parsed_args, **kwargs):
@@ -53,6 +53,10 @@ def main() -> None:
     p_desc_group.add_argument("description", nargs="?", metavar="description", help="登録する説明文（省略で表示）")
     p_desc_group.add_argument("--delete", action="store_true", help="説明を削除")
 
+    p_protect = sub.add_parser("protect", help="プロジェクトのアンロード禁止を設定・解除")
+    p_protect.add_argument("project", metavar="project", help="プロジェクト名").completer = _all_projects_completer
+    p_protect.add_argument("--remove", action="store_true", help="アンロード禁止を解除")
+
     p_config = sub.add_parser("config", help="設定の表示・変更")
     p_config.add_argument("--icloud-dir", metavar="PATH", help="iCloud側のZip保存ディレクトリ")
     p_config.add_argument("--local-dir", metavar="PATH", help="ローカルワークスペースディレクトリ")
@@ -86,3 +90,5 @@ def main() -> None:
     elif args.command == "desc":
         description = "" if args.delete else args.description
         cmd_desc(args.project, description, c)
+    elif args.command == "protect":
+        cmd_protect(args.project, args.remove, c)

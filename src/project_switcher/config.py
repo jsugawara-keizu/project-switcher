@@ -13,6 +13,7 @@ DEFAULTS = {
     ),
     "local_dir": str(Path.home() / "Local Workspaces"),
     "descriptions": {},
+    "protected": [],
 }
 
 
