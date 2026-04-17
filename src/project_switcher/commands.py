@@ -186,12 +186,22 @@ def cmd_list(cfg: dict) -> None:
         else []
     )
     if icloud_zips:
-        headers = ["名前", "説明"]
+        import datetime
+        headers = ["名前", "日付", "サイズ", "説明"]
         rows = []
         for z in icloud_zips:
             name = z.stem
+            stat = z.stat()
+            date_str = datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d")
+            size_bytes = stat.st_size
+            if size_bytes >= 1024 ** 3:
+                size_str = f"{size_bytes / 1024 ** 3:.1f} GB"
+            elif size_bytes >= 1024 ** 2:
+                size_str = f"{size_bytes / 1024 ** 2:.1f} MB"
+            else:
+                size_str = f"{size_bytes / 1024:.1f} KB"
             desc = descriptions.get(name, "")
-            rows.append([name, desc])
+            rows.append([name, date_str, size_str, desc])
         _print_table(headers, rows)
     else:
         print("  (なし)")
