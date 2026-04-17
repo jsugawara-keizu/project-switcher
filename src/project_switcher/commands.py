@@ -116,6 +116,32 @@ def _fmt_desc(name: str, descriptions: dict) -> str:
 
 
 def cmd_list(cfg: dict) -> None:
+    def _print_table(headers: list[str], rows: list[list[str]]) -> None:
+        if not rows:
+            return
+        # 各列の幅を計算
+        widths: list[int] = []
+        for i, h in enumerate(headers):
+            maxw = len(h)
+            for r in rows:
+                cell = str(r[i]) if i < len(r) else ""
+                if len(cell) > maxw:
+                    maxw = len(cell)
+            widths.append(maxw)
+
+        # ヘッダー行
+        header_line = "  " + " | ".join(h.ljust(widths[i]) for i, h in enumerate(headers))
+        sep_line = "  " + "-+-".join("-" * widths[i] for i in range(len(headers)))
+        print(header_line)
+        print(sep_line)
+
+        # データ行
+        for r in rows:
+            line = "  " + " | ".join(
+                (str(r[i]) if i < len(r) else "").ljust(widths[i]) for i in range(len(headers))
+            )
+            print(line)
+
     icloud_dir = Path(cfg["icloud_dir"])
     local_dir = Path(cfg["local_dir"])
     descriptions = cfg.get("descriptions", {})
@@ -124,10 +150,15 @@ def cmd_list(cfg: dict) -> None:
     print("=== ロード済み (Local) ===")
     local_projects = sorted(p for p in local_dir.iterdir() if p.is_dir()) if local_dir.exists() else []
     if local_projects:
+        headers = ["名前", "バックアップ", "保護", "説明"]
+        rows: list[list[str]] = []
         for p in local_projects:
-            tag = "  [iCloudにバックアップあり]" if (icloud_dir / f"{p.name}.zip").exists() else ""
-            lock = "  [保護]" if p.name in protected else ""
-            print(f"  {p.name}{tag}{lock}{_fmt_desc(p.name, descriptions)}")
+            name = p.name
+            backup = "あり" if (icloud_dir / f"{name}.zip").exists() else ""
+            lock = "はい" if name in protected else ""
+            desc = descriptions.get(name, "")
+            rows.append([name, backup, lock, desc])
+        _print_table(headers, rows)
     else:
         print("  (なし)")
 
@@ -139,10 +170,14 @@ def cmd_list(cfg: dict) -> None:
         else []
     )
     if icloud_zips:
+        headers = ["名前", "ローカル", "説明"]
+        rows = []
         for z in icloud_zips:
             name = z.stem
-            tag = "  ※ローカルにも存在" if (local_dir / name).is_dir() else ""
-            print(f"  {name}{tag}{_fmt_desc(name, descriptions)}")
+            local_exists = "あり" if (local_dir / name).is_dir() else ""
+            desc = descriptions.get(name, "")
+            rows.append([name, local_exists, desc])
+        _print_table(headers, rows)
     else:
         print("  (なし)")
 
