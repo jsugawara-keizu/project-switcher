@@ -300,6 +300,11 @@ def _unload_one(project: str, icloud_dir: Path, local_dir: Path, protected: list
         print(f"Error: '{project}' はカレントディレクトリを含むためアンロードできません（別のディレクトリに移動してから実行してください）", file=sys.stderr)
         return False
 
+    if zip_path.exists() or _icloud_placeholder(zip_path).exists():
+        print(f"Error: '{project}' の zip ファイルがすでに存在します: {zip_path}", file=sys.stderr)
+        print(f"  上書きする場合は先に zip ファイルを削除してください。", file=sys.stderr)
+        return False
+
     print(f"アンロード中: {project}")
     print(f"  圧縮先: {zip_path}")
 
@@ -319,6 +324,14 @@ def _unload_one(project: str, icloud_dir: Path, local_dir: Path, protected: list
                 _progress("圧縮", i, total)
         os.close(tmp_fd)
         _progress_done("圧縮", total)
+
+        if not zipfile.is_zipfile(tmp_zip):
+            raise RuntimeError("作成した zip ファイルが不正です")
+        with zipfile.ZipFile(tmp_zip, "r") as zf:
+            bad = zf.testzip()
+            if bad is not None:
+                raise RuntimeError(f"zip ファイルが破損しています (最初の破損エントリ: {bad})")
+
         shutil.move(str(tmp_zip), str(zip_path))
     except Exception:
         tmp_zip.unlink(missing_ok=True)
