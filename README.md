@@ -1,5 +1,7 @@
 # project-switcher
 
+A macOS CLI that loads and unloads project folders between cloud storage (iCloud Drive, OneDrive, Google Drive) and a local workspace to save disk space.
+
 プロジェクトフォルダをクラウドストレージとローカルワークスペース間でロード/アンロードし、Macのストレージ使用量を節約するCLIツール。
 
 ## インストール

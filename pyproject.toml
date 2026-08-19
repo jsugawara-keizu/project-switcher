@@ -14,3 +14,23 @@ pswitch = "project_switcher.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/project_switcher"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+tag_format = "v{version}"
+commit_message = "chore(release): {version} [skip ci]"
+commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+# No PyPI publishing: this package is installed directly from git (pipx/pip/uv
+# install git+https://...), so we intentionally leave `build_command` unset
+# (no sdist/wheel build) and never run `twine`/`upload`.
+
+[tool.semantic_release.branches.main]
+match = "main"
+
+[tool.semantic_release.remote]
+type = "github"
+
+[tool.semantic_release.publish]
+# No dist/ artifacts are built, so nothing is attached to the GitHub Release
+# beyond the auto-generated changelog notes.
+upload_to_vcs_release = true
